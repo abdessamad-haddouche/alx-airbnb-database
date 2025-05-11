@@ -1,4 +1,4 @@
--- AirBnB Database Schema for MySQL
+-- AirBnB Database Schema for MySQL (Compatible version)
 
 -- Drop tables in reverse order to respect foreign key constraints
 DROP TABLE IF EXISTS message;
@@ -28,7 +28,7 @@ CREATE TABLE `property` (
     `name` VARCHAR(255) NOT NULL,
     `description` TEXT NOT NULL,
     `location` VARCHAR(255) NOT NULL,
-    `price_per_night` DECIMAL(10, 2) NOT NULL CHECK (`price_per_night` > 0),
+    `price_per_night` DECIMAL(10, 2) NOT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -47,8 +47,8 @@ CREATE TABLE `booking` (
     `property_id` CHAR(36) NOT NULL,
     `user_id` CHAR(36) NOT NULL,
     `start_date` DATE NOT NULL,
-    `end_date` DATE NOT NULL CHECK (`end_date` > `start_date`),
-    `total_price` DECIMAL(10, 2) NOT NULL CHECK (`total_price` >= 0),
+    `end_date` DATE NOT NULL,
+    `total_price` DECIMAL(10, 2) NOT NULL,
     `status` ENUM('pending', 'confirmed', 'canceled') NOT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -72,7 +72,7 @@ CREATE TABLE `booking` (
 CREATE TABLE `payment` (
     `payment_id` CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     `booking_id` CHAR(36) NOT NULL,
-    `amount` DECIMAL(10, 2) NOT NULL CHECK (`amount` > 0),
+    `amount` DECIMAL(10, 2) NOT NULL,
     `payment_date` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `payment_method` ENUM('credit_card', 'paypal', 'stripe') NOT NULL,
     INDEX `idx_payment_booking_id` (`booking_id`),
@@ -88,7 +88,7 @@ CREATE TABLE `review` (
     `review_id` CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     `property_id` CHAR(36) NOT NULL,
     `user_id` CHAR(36) NOT NULL,
-    `rating` INT NOT NULL CHECK (`rating` >= 1 AND `rating` <= 5),
+    `rating` INT NOT NULL,
     `comment` TEXT NOT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -130,3 +130,102 @@ CREATE TABLE `message` (
         ON DELETE CASCADE
         ON UPDATE CASCADE
 );
+
+-- Add validation triggers instead of CHECK constraints
+DELIMITER //
+
+-- Ensure property price is positive
+CREATE TRIGGER before_property_insert
+BEFORE INSERT ON property
+FOR EACH ROW
+BEGIN
+    IF NEW.price_per_night <= 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Price per night must be positive';
+    END IF;
+END//
+
+CREATE TRIGGER before_property_update
+BEFORE UPDATE ON property
+FOR EACH ROW
+BEGIN
+    IF NEW.price_per_night <= 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Price per night must be positive';
+    END IF;
+END//
+
+-- Ensure booking dates are valid and price is non-negative
+CREATE TRIGGER before_booking_insert
+BEFORE INSERT ON booking
+FOR EACH ROW
+BEGIN
+    IF NEW.end_date <= NEW.start_date THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'End date must be after start date';
+    END IF;
+    
+    IF NEW.total_price < 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Total price must be non-negative';
+    END IF;
+END//
+
+CREATE TRIGGER before_booking_update
+BEFORE UPDATE ON booking
+FOR EACH ROW
+BEGIN
+    IF NEW.end_date <= NEW.start_date THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'End date must be after start date';
+    END IF;
+    
+    IF NEW.total_price < 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Total price must be non-negative';
+    END IF;
+END//
+
+-- Ensure payment amount is positive
+CREATE TRIGGER before_payment_insert
+BEFORE INSERT ON payment
+FOR EACH ROW
+BEGIN
+    IF NEW.amount <= 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Payment amount must be positive';
+    END IF;
+END//
+
+CREATE TRIGGER before_payment_update
+BEFORE UPDATE ON payment
+FOR EACH ROW
+BEGIN
+    IF NEW.amount <= 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Payment amount must be positive';
+    END IF;
+END//
+
+-- Ensure rating is between 1 and 5
+CREATE TRIGGER before_review_insert
+BEFORE INSERT ON review
+FOR EACH ROW
+BEGIN
+    IF NEW.rating < 1 OR NEW.rating > 5 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Rating must be between 1 and 5';
+    END IF;
+END//
+
+CREATE TRIGGER before_review_update
+BEFORE UPDATE ON review
+FOR EACH ROW
+BEGIN
+    IF NEW.rating < 1 OR NEW.rating > 5 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Rating must be between 1 and 5';
+    END IF;
+END//
+
+DELIMITER ;
